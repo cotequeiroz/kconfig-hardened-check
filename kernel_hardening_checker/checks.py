@@ -262,11 +262,11 @@ def add_kconfig_checks(l: List[ChecklistObjType], arch: str) -> None:
     if arch in ('ARM64', 'ARM', 'RISCV'):
         l += [KconfigCheck('self_protection', 'kspp', 'WERROR', 'y')]
     if arch in ('X86_64', 'ARM64'):
-        l += [AND(cfi_clang_is_set,
-                  cc_is_clang)]
+        cfi_clang_or_gcc = OR(cfi_clang_is_set,
+                              cc_is_gcc)
+        l += [cfi_clang_or_gcc]
         l += [AND(cfi_clang_permissive_not_set,
-                  cfi_clang_is_set,
-                  cc_is_clang)]
+                  cfi_clang_or_gcc)]
     if arch in ('X86_64', 'X86_32'):
         l += [KconfigCheck('self_protection', 'kspp', 'IOMMU_DEFAULT_DMA_STRICT', 'y')]
         l += [AND(KconfigCheck('self_protection', 'kspp', 'INTEL_IOMMU_DEFAULT_ON', 'y'),
@@ -308,8 +308,7 @@ def add_kconfig_checks(l: List[ChecklistObjType], arch: str) -> None:
 
     # 'self_protection', 'a13xp0p0v'
     if arch == 'X86_64':
-        l += [AND(KconfigCheck('self_protection', 'a13xp0p0v', 'CFI_AUTO_DEFAULT', 'is not set'),
-                  KconfigCheck('self_protection', 'a13xp0p0v', 'CFI_AUTO_DEFAULT', 'is present'))] # same as 'cfi=kcfi'
+        l += [KconfigCheck('self_protection', 'a13xp0p0v', 'CFI_AUTO_DEFAULT', 'is not set')] # same as 'cfi=kcfi'
     if arch == 'ARM':
         l += [KconfigCheck('self_protection', 'a13xp0p0v', 'ARM_SMMU', 'y')]
         l += [KconfigCheck('self_protection', 'a13xp0p0v', 'ARM_SMMU_DISABLE_BYPASS_BY_DEFAULT', 'y')]
@@ -698,8 +697,7 @@ def add_cmdline_checks(l: List[ChecklistObjType], arch: str) -> None:
     if arch == 'X86_64':
         l += [OR(CmdlineCheck('self_protection', 'kspp', 'cfi', 'kcfi'),
                  AND(KconfigCheck('self_protection', 'a13xp0p0v', 'CFI_AUTO_DEFAULT', 'is not set'),
-                     KconfigCheck('self_protection', 'a13xp0p0v', 'CFI_AUTO_DEFAULT', 'is present'),
-                     CmdlineCheck('-', '-', 'cfi', 'is not set')))]
+                     CmdlineCheck('self_protection', 'al3xp0p0v', 'cfi', 'is not set')))]
 
     # 'self_protection', 'clipos'
     if arch in ('X86_64', 'X86_32'):
