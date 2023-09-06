@@ -304,11 +304,11 @@ def add_kconfig_checks(l: list[ChecklistObjType], arch: str) -> None:
     if arch in {'ARM64', 'ARM', 'RISCV'}:
         l += [KconfigCheck('self_protection', 'kspp', 'WERROR', 'y')]
     if arch in {'X86_64', 'ARM64'}:
-        l += [AND(cfi_clang_is_set,
-                  cc_is_clang)]
+        cfi_clang_or_gcc = OR(cfi_clang_is_set,
+                              cc_is_gcc)
+        l += [cfi_clang_or_gcc]
         l += [AND(cfi_clang_permissive_not_set,
-                  cfi_clang_is_set,
-                  cc_is_clang)]
+                  cfi_clang_or_gcc)]
     if arch in {'X86_64', 'X86_32'}:
         l += [KconfigCheck('self_protection', 'kspp', 'IOMMU_DEFAULT_DMA_STRICT', 'y')]
         l += [KconfigCheck('self_protection', 'kspp', 'IOMMU_DEFAULT_DMA_LAZY', 'is not set')]
@@ -318,8 +318,7 @@ def add_kconfig_checks(l: list[ChecklistObjType], arch: str) -> None:
     if arch in {'ARM64', 'RISCV'}:
         l += [KconfigCheck('self_protection', 'kspp', 'DEBUG_WX', 'y')]
     if arch == 'X86_64':
-        l += [AND(KconfigCheck('self_protection', 'kspp', 'CFI_AUTO_DEFAULT', 'is not set'),
-                  KconfigCheck('self_protection', 'kspp', 'CFI_AUTO_DEFAULT', 'is present'))]
+        l += [KconfigCheck('self_protection', 'kspp', 'CFI_AUTO_DEFAULT', 'is not set')]
         l += [OR(KconfigCheck('self_protection', 'kspp', 'MITIGATION_SLS', 'y'),
                  KconfigCheck('self_protection', 'kspp', 'SLS', 'y'))]
                  # this feature protects against CVE-2021-26341 in Straight-Line-Speculation
@@ -783,7 +782,6 @@ def add_cmdline_checks(l: list[ChecklistObjType], arch: str) -> None:
     if arch == 'X86_64':
         l += [OR(CmdlineCheck('self_protection', 'kspp', 'cfi', 'kcfi'),
                  AND(KconfigCheck('self_protection', 'kspp', 'CFI_AUTO_DEFAULT', 'is not set'),
-                     KconfigCheck('self_protection', 'kspp', 'CFI_AUTO_DEFAULT', 'is present'),
                      CmdlineCheck('-', '-', 'cfi', 'is not set')))]
 
     # 'self_protection', 'clipos'
