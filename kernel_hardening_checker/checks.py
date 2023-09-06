@@ -274,7 +274,8 @@ def add_kconfig_checks(l, arch):
         l += [OR(KconfigCheck('cut_attack_surface', 'defconfig', 'STRICT_DEVMEM', 'y'),
                  devmem_not_set)] # refers to LOCKDOWN
     if arch in ('X86_64', 'X86_32'):
-        l += [KconfigCheck('cut_attack_surface', 'defconfig', 'X86_INTEL_TSX_MODE_OFF', 'y')] # tsx=off
+        l += [OR(KconfigCheck('cut_attack_surface', 'defconfig', 'X86_INTEL_TSX_MODE_OFF', 'y'), # tsx=off
+                 KconfigCheck('cut_attack_surface', 'my', 'CPU_SUP_INTEL', 'is not set'))]
 
     # 'cut_attack_surface', 'kspp'
     l += [KconfigCheck('cut_attack_surface', 'kspp', 'SECURITY_DMESG_RESTRICT', 'y')]
@@ -544,9 +545,12 @@ def add_cmdline_checks(l, arch):
 
     # 'cut_attack_surface', 'defconfig'
     if arch in ('X86_64', 'X86_32'):
+        tsx_not_set = CmdlineCheck('cut_attack_surface', 'defconfig', 'tsx', 'is not set')
         l += [OR(CmdlineCheck('cut_attack_surface', 'defconfig', 'tsx', 'off'),
                  AND(KconfigCheck('cut_attack_surface', 'defconfig', 'X86_INTEL_TSX_MODE_OFF', 'y'),
-                     CmdlineCheck('cut_attack_surface', 'defconfig', 'tsx', 'is not set')))]
+                     tsx_not_set),
+                 AND(KconfigCheck('cut_attack_surface', 'defconfig', 'CPU_SUP_INTEL', 'is not set'),
+                     tsx_not_set))]
 
     # 'cut_attack_surface', 'kspp'
     l += [CmdlineCheck('cut_attack_surface', 'kspp', 'nosmt', 'is present')] # slow (high performance penalty)
