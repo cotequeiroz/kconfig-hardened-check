@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 """
 This tool is for checking the security hardening options of the Linux kernel.
@@ -10,6 +10,20 @@ This module is the engine of checks.
 
 # pylint: disable=missing-class-docstring,missing-function-docstring
 # pylint: disable=line-too-long,invalid-name,too-many-branches
+
+GREEN_COLOR = '\x1b[32m'
+RED_COLOR = '\x1b[31m'
+COLOR_END = '\x1b[0m'
+
+def colorize_result(input_text):
+    if input_text is None:
+        return input_text
+    if input_text.startswith('OK'):
+        color = GREEN_COLOR
+    else:
+        assert(input_text.startswith('FAIL:')), f'unexpected result "{input_text}"'
+        color = RED_COLOR
+    return f'{color}{input_text}{COLOR_END}'
 
 
 class OptCheck:
@@ -42,6 +56,15 @@ class OptCheck:
 
         self.state = None
         self.result = None
+
+    @property
+    def type(self):
+        return None
+
+    def set_state(self, data):
+        assert(data is None or isinstance(data, str)), \
+               f'invalid state "{data}" for "{self.name}" check'
+        self.state = data
 
     def check(self):
         # handle the 'is present' check
@@ -78,19 +101,26 @@ class OptCheck:
     def table_print(self, _mode, with_results):
         print(f'{self.name:<40}|{self.type:^7}|{self.expected:^12}|{self.decision:^10}|{self.reason:^18}', end='')
         if with_results:
-            print(f'| {self.result}', end='')
+            print(f'| {colorize_result(self.result)}', end='')
 
     def json_dump(self, with_results):
-        dump = [self.name, self.type, self.expected, self.decision, self.reason]
+        dump = {
+            "option_name": self.name,
+            "type": self.type,
+            "desired_val": self.expected,
+            "decision": self.decision,
+            "reason": self.reason,
+        }
         if with_results:
-            dump.append(self.result)
+            dump["check_result"] = self.result
+            dump["check_result_bool"] = self.result.startswith('OK')
         return dump
 
 
 class KconfigCheck(OptCheck):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.name = 'CONFIG_' + self.name
+        self.name = f'CONFIG_{self.name}'
 
     @property
     def type(self):
@@ -111,8 +141,10 @@ class SysctlCheck(OptCheck):
 
 class VersionCheck:
     def __init__(self, ver_expected):
-        assert(ver_expected and isinstance(ver_expected, tuple) and len(ver_expected) == 2), \
-               f'invalid version "{ver_expected}" for VersionCheck'
+        assert(ver_expected and isinstance(ver_expected, tuple) and len(ver_expected) == 3), \
+               f'invalid expected version "{ver_expected}" for VersionCheck (1)'
+        assert(all(map(lambda x: isinstance(x, int), ver_expected))), \
+               f'invalid expected version "{ver_expected}" for VersionCheck (2)'
         self.ver_expected = ver_expected
         self.ver = ()
         self.result = None
@@ -121,23 +153,36 @@ class VersionCheck:
     def type(self):
         return 'version'
 
+    def set_state(self, data):
+        assert(data and isinstance(data, tuple) and len(data) >= 3), \
+               f'invalid version "{data}" for VersionCheck'
+        self.ver = data[:3]
+
     def check(self):
         if self.ver[0] > self.ver_expected[0]:
-            self.result = f'OK: version >= {self.ver_expected[0]}.{self.ver_expected[1]}'
+            self.result = f'OK: version >= {self.ver_expected}'
             return
         if self.ver[0] < self.ver_expected[0]:
-            self.result = f'FAIL: version < {self.ver_expected[0]}.{self.ver_expected[1]}'
+            self.result = f'FAIL: version < {self.ver_expected}'
             return
-        if self.ver[1] >= self.ver_expected[1]:
-            self.result = f'OK: version >= {self.ver_expected[0]}.{self.ver_expected[1]}'
+        # self.ver[0] and self.ver_expected[0] are equal
+        if self.ver[1] > self.ver_expected[1]:
+            self.result = f'OK: version >= {self.ver_expected}'
             return
-        self.result = f'FAIL: version < {self.ver_expected[0]}.{self.ver_expected[1]}'
+        if self.ver[1] < self.ver_expected[1]:
+            self.result = f'FAIL: version < {self.ver_expected}'
+            return
+        # self.ver[1] and self.ver_expected[1] are equal too
+        if self.ver[2] >= self.ver_expected[2]:
+            self.result = f'OK: version >= {self.ver_expected}'
+            return
+        self.result = f'FAIL: version < {self.ver_expected}'
 
     def table_print(self, _mode, with_results):
-        ver_req = f'kernel version >= {self.ver_expected[0]}.{self.ver_expected[1]}'
+        ver_req = f'kernel version >= {self.ver_expected}'
         print(f'{ver_req:<91}', end='')
         if with_results:
-            print(f'| {self.result}', end='')
+            print(f'| {colorize_result(self.result)}', end='')
 
 
 class ComplexOptCheck:
@@ -165,9 +210,10 @@ class ComplexOptCheck:
 
     def table_print(self, mode, with_results):
         if mode == 'verbose':
-            print(f'    {"<<< " + self.__class__.__name__ + " >>>":87}', end='')
+            class_name = f'<<< {self.__class__.__name__} >>>'
+            print(f'    {class_name:87}', end='')
             if with_results:
-                print(f'| {self.result}', end='')
+                print(f'| {colorize_result(self.result)}', end='')
             for o in self.opts:
                 print()
                 o.table_print(mode, with_results)
@@ -175,12 +221,14 @@ class ComplexOptCheck:
             o = self.opts[0]
             o.table_print(mode, False)
             if with_results:
-                print(f'| {self.result}', end='')
+                print(f'| {colorize_result(self.result)}', end='')
 
     def json_dump(self, with_results):
         dump = self.opts[0].json_dump(False)
         if with_results:
-            dump.append(self.result)
+            # Add the 'check_result' and 'check_result_bool' keys to the dictionary
+            dump["check_result"] = self.result
+            dump["check_result_bool"] = self.result.startswith('OK')
         return dump
 
 
@@ -261,11 +309,11 @@ def populate_simple_opt_with_data(opt, data, data_type):
         return
 
     if data_type in ('kconfig', 'cmdline', 'sysctl'):
-        opt.state = data.get(opt.name, None)
+        opt.set_state(data.get(opt.name, None))
     else:
         assert(data_type == 'version'), \
                f'unexpected data type "{data_type}"'
-        opt.ver = data
+        opt.set_state(data)
 
 
 def populate_opt_with_data(opt, data, data_type):

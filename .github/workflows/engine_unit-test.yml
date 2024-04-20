@@ -20,12 +20,12 @@ jobs:
     steps:
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Get source code for collecting coverage
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install coverage
       run: |
@@ -34,7 +34,7 @@ jobs:
 
     - name: Run unit-tests and collect coverage
       run: |
-        coverage run --include=kconfig_hardened_check/engine.py,kconfig_hardened_check/test_engine.py -m unittest -v -b
+        coverage run --include=kernel_hardening_checker/engine.py,kernel_hardening_checker/test_engine.py -m unittest -v -b
         coverage xml -i -o coverage_unittest.xml
 
     - name: Handle coverage
